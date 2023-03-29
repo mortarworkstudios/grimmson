@@ -6,7 +6,7 @@ import (
 	"log"
 
 	"github.com/BurntSushi/toml"
-	scraper "github.com/NickBrisebois/DiscordServerMessageScraper/scraper"
+	"github.com/mortarworkstudios/grimmson/scraper"
 )
 
 var version string
