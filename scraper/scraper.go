@@ -5,8 +5,14 @@ import (
 	"log"
 	"os"
 	"sync"
+	"time"
 
 	"github.com/bwmarrin/discordgo"
+)
+
+const (
+	archivePath   = "./archive"
+	archiveSuffix = "_archive_"
 )
 
 type ServerScraper struct {
@@ -49,14 +55,13 @@ func (sc *ServerScraper) InitScraper() error {
 		}
 	}
 
-	dumpPath := "./dump"
-	os.Mkdir(dumpPath, os.ModePerm)
+	os.Mkdir(archivePath, os.ModePerm)
 
 	var wg sync.WaitGroup
 	for _, channel := range textChannels {
-		log.Printf("Starting dump for %s\n", channel.Name)
+		log.Printf("Starting archive for %s\n", channel.Name)
 		wg.Add(1)
-		go sc.BulkDownloadMessages(&wg, channel, dumpPath)
+		go sc.BulkDownloadMessages(&wg, channel, archivePath)
 	}
 	wg.Wait()
 
@@ -64,23 +69,23 @@ func (sc *ServerScraper) InitScraper() error {
 	return nil
 }
 
-func (sc *ServerScraper) BulkDownloadMessages(wg *sync.WaitGroup, channel *discordgo.Channel, dumpPath string) {
+func (sc *ServerScraper) BulkDownloadMessages(wg *sync.WaitGroup, channel *discordgo.Channel, archivePath string) {
 	defer wg.Done()
 	var messages []*discordgo.Message
 	var err error
-
-	// Create dump file to write to
-	var dumpFile *os.File
-	dumpFile, err = os.Create(dumpPath + "/dump-" + channel.Name + ".txt")
+	dateStamp := time.Now().Format(time.RFC3339)
+	// Create an archive file to write to
+	var archiveFile *os.File
+	archiveFile, err = os.Create(archivePath + "/" + channel.Name + archiveSuffix + dateStamp + ".txt")
 	if err != nil {
 		log.Fatal(err.Error())
 	}
-	defer dumpFile.Close()
-	dumpWriter := bufio.NewWriter(dumpFile)
+	defer archiveFile.Close()
+	archiveWriter := bufio.NewWriter(archiveFile)
 
-	doneDumping := false
+	doneArchiving := false
 	beforeID := ""
-	for !doneDumping {
+	for !doneArchiving {
 		// Get all the messages we can (max is a limit per API call)
 		messages, err = sc.sesh.ChannelMessages(channel.ID, 100, beforeID, "", "")
 		if err != nil {
@@ -88,7 +93,7 @@ func (sc *ServerScraper) BulkDownloadMessages(wg *sync.WaitGroup, channel *disco
 		}
 
 		if len(messages) == 0 {
-			doneDumping = true
+			doneArchiving = true
 			break
 		}
 
@@ -96,10 +101,10 @@ func (sc *ServerScraper) BulkDownloadMessages(wg *sync.WaitGroup, channel *disco
 		for _, msg := range messages {
 			// Grab the last ID to get more messages from before
 			beforeID = msg.ID
-			dumpWriter.WriteString(msg.Content + "\n")
+			archiveWriter.WriteString(msg.Content + "\n")
 		}
 	}
 
-	log.Printf("Done dump for %s\n", channel.Name)
-	dumpWriter.Flush()
+	log.Printf("Archiving complete for %s\n", channel.Name)
+	archiveWriter.Flush()
 }
